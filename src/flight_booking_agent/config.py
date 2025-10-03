@@ -2,17 +2,18 @@
 import os
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from .tools.flight_tools import search_flights_tool
 
-# Tải các biến môi trường từ file .env
 load_dotenv()
-
-# Lấy base URL của vLLM (mặc định là http://localhost:8000/v1 nếu bạn không đổi)
 VLLM_BASE_URL = os.getenv("VLLM_BASE_URL", "http://localhost:8000/v1")
 
-# Khởi tạo mô hình LLM
+# LLM thông thường để trò chuyện
 llm = ChatOpenAI(
-    model="Qwen/Qwen2.5-1.5B-Instruct",   # Tên model bạn đã load trên vLLM
-    openai_api_key="EMPTY",               # vLLM không cần key, cứ để "EMPTY"
-    openai_api_base=VLLM_BASE_URL,        # URL trỏ đến server vLLM
+    model="Qwen/Qwen2.5-1.5B-Instruct",
+    openai_api_key="EMPTY",
+    openai_api_base=VLLM_BASE_URL,
     temperature=0.7
 )
+
+# LLM đặc biệt có khả năng sử dụng tools
+llm_with_tools = llm.bind_tools([search_flights_tool])
