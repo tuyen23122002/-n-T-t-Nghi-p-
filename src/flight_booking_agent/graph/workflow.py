@@ -15,7 +15,9 @@ from ..agents.booking_manager import booking_node
 
 from ..tools.flight_tools import search_flights_tool
 from ..tools.booking_tools import create_booking_tool 
-# (Giả định bạn sẽ tạo file booking_tools.py)
+from ..agents.flight_searcher import flight_search_node # Import node mới
+from ..config import llm, llm_with_tools # Import llm_with_tools
+from langgraph.prebuilt import ToolNode
 
 from ..config import llm, llm_with_tools
 from langgraph.prebuilt import ToolNode
@@ -32,7 +34,7 @@ bound_booking_node = partial(booking_node, llm=llm_with_tools)
 
 # Tạo một ToolNode duy nhất chứa TẤT CẢ các công cụ mà hệ thống có thể sử dụng.
 # Agent Manager sẽ tự động định tuyến đến node này khi cần.
-all_tools = [search_flights_tool, create_booking_tool]
+all_tools = [search_flights_tool] # Thêm tool mới vào
 tool_node = ToolNode(all_tools)
 
 
