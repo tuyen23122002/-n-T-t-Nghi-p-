@@ -1,15 +1,16 @@
-
+# main.py
 import sys
 import os
+from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
+
+# Thêm src vào sys.path để có thể import từ đó
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
-from langchain_core.messages import HumanMessage
 from src.flight_booking_agent.graph.workflow import app
 
-# Chúng ta sẽ lưu trữ lịch sử tin nhắn ở đây
-# Trong ứng dụng thực tế, bạn sẽ lưu nó vào database
-conversation_history = []
+def run_conversation():
+    # Sử dụng một list để lưu trữ lịch sử tin nhắn
+    conversation_history: list[BaseMessage] = []
 
-if __name__ == "__main__":
     print("Chatbot đã sẵn sàng. Gõ 'thoát' để kết thúc.")
     
     while True:
@@ -25,13 +26,28 @@ if __name__ == "__main__":
         inputs = {"messages": conversation_history}
         
         # Chạy đồ thị
+        # result chính là trạng thái cuối cùng của đồ thị sau khi chạy
         result = app.invoke(inputs)
 
-        # Lấy tin nhắn cuối cùng (là của AI) từ kết quả
-        ai_message = result["messages"][-1]
+        # Lấy danh sách tin nhắn từ kết quả
+        final_messages = result["messages"]
 
-        # Thêm tin nhắn của AI vào lịch sử
-        conversation_history.append(ai_message)
+        # Tìm tin nhắn cuối cùng là của AI để hiển thị
+        # Cách làm này an toàn hơn việc chỉ lấy phần tử cuối cùng
+        last_ai_message = None
+        if final_messages and isinstance(final_messages[-1], AIMessage):
+            last_ai_message = final_messages[-1]
+        
+        if last_ai_message:
+            print("Chatbot:", last_ai_message.content)
+            # Cập nhật lịch sử với toàn bộ tin nhắn mới
+            conversation_history = final_messages
+        else:
+            # Trường hợp này xảy ra nếu đồ thị kết thúc mà không tạo ra tin nhắn AI mới
+            # (ví dụ: đang chờ gọi tool)
+            print("Chatbot: [Đang xử lý...]")
+            # Vẫn cập nhật lịch sử để giữ trạng thái
+            conversation_history = final_messages
 
-        # In ra câu trả lời của AI
-        print("Chatbot:", ai_message.content)
+if __name__ == "__main__":
+    run_conversation()
