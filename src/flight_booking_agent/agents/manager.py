@@ -3,7 +3,7 @@ import json
 from langchain_core.messages import SystemMessage, HumanMessage
 from langchain_core.language_models.chat_models import BaseChatModel
 
-from flight_booking_agent.graph.state import FlightBookingState
+from ..graph.state import FlightBookingState
 
 def get_simplified_state(state: FlightBookingState) -> str:
     """Tạo một chuỗi mô tả trạng thái hiện tại một cách đơn giản cho LLM."""

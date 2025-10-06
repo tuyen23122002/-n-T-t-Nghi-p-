@@ -1,7 +1,7 @@
 # src/flight_booking_agent/agents/flight_searcher.py
 import json
 from langchain_core.messages import SystemMessage, AIMessage, ToolMessage, HumanMessage
-from flight_booking_agent.graph.state import FlightBookingState
+from ..graph.state import FlightBookingState
 
 def flight_search_node(state: FlightBookingState, llm_with_tools) -> dict:
     """
