@@ -1,68 +1,59 @@
-# src/flight_booking_agent/agents/manager.py
-import json
-from langchain_core.messages import SystemMessage, HumanMessage
-from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
+from typing import Literal
+from ..graph.state import AgentState
+from ..config import llm
 
-from ..graph.state import FlightBookingState
-
-def get_simplified_state(state: FlightBookingState) -> str:
-    """Tạo một chuỗi mô tả trạng thái hiện tại một cách đơn giản cho LLM."""
-    simplified = {}
-    for key, value in state.items():
-        if key != "messages" and value is not None:
-            simplified[key] = value
-    if not simplified:
-        return "Chưa có thông tin nào được thu thập."
-    return json.dumps(simplified, indent=2, ensure_ascii=False)
-
-def manager_agent_node(state: FlightBookingState, llm: BaseChatModel) -> dict:
-    """
-    Node này đóng vai trò là Agent Manager, quyết định agent tiếp theo cần gọi.
-    """
-    print("--- NODE: Agent Manager ---")
-    
-    # Chuẩn bị context cho prompt
-    conversation_history = "\n".join(
-        [f"{msg.type}: {msg.content}" for msg in state["messages"]]
+# Pydantic model để định nghĩa output có cấu trúc cho Manager
+class ManagerHandoff(BaseModel):
+    target_agent_name: Literal["booking_agent", "general_agent", "cancel_booking_agent", "END"] = Field(
+        ..., description="Agent chuyên trách phù hợp để xử lý yêu cầu."
     )
-    current_state_str = get_simplified_state(state)
-    
-    system_prompt_template = """
-    Bạn là một "Agent Manager" thông minh, điều phối một nhóm các agent chuyên sâu để giúp người dùng đặt vé máy bay.
-    Nhiệm vụ của bạn là phân tích lịch sử hội thoại và trạng thái hiện tại, sau đó quyết định agent chuyên sâu nào sẽ thực hiện bước tiếp theo.
 
-    Đây là danh sách các agent chuyên sâu bạn có thể điều phối:
-    1. `information_gatherer`: Sử dụng khi thông tin cần thiết (điểm đi, điểm đến, ngày đi) vẫn chưa đầy đủ.
-    2. `flight_searcher`: Chỉ sử dụng khi đã có đủ thông tin để tìm kiếm.
-    3. `recommendation_agent`: Sử dụng ngay sau khi `flight_searcher` đã tìm thấy kết quả.
-    4. `booking_agent`: Sử dụng sau khi người dùng đã xác nhận lựa chọn một chuyến bay cụ thể.
-    5. `FINISH`: Sử dụng khi quy trình hoàn tất hoặc không thể tiếp tục.
-
-    QUY TRÌNH SUY NGHĨ CỦA BẠN:
-    1. Đọc kỹ tin nhắn cuối cùng của người dùng và xem lại lịch sử hội thoại.
-    2. Xem xét trạng thái hiện tại của việc đặt vé.
-    3. Dựa trên đó, chọn MỘT agent từ danh sách trên để thực hiện bước tiếp theo.
-    4. Chỉ trả lời bằng tên của agent được chọn. Câu trả lời của bạn phải là MỘT trong các chuỗi sau: "information_gatherer", "flight_searcher", "recommendation_agent", "booking_agent", "FINISH".
+def manager_node(state: AgentState) -> dict:
+    """
+    Node điều phối: Phân tích yêu cầu và quyết định agent tiếp theo.
     """
     
-    human_prompt = f"""
-    Đây là trạng thái hiện tại:
-    {current_state_str}
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system",
+             """"## Vai trò ##"
+            "Bạn là **Vivi**, là một trợ lý ảo đóng vai trò điều phối viên, "
+            "Nhiệm vụ **DUY NHẤT** của bạn là phân tích yêu cầu của người dùng và "
+            "**chuyển hướng chính xác** đến agent chuyên trách phù hợp. "
+            "Bạn **TUYỆT ĐỐI KHÔNG** được tự mình trả lời bất kỳ câu hỏi nào của khách hàng.\n\n"
 
-    Đây là lịch sử hội thoại:
-    {conversation_history}
+            "## Các agent chuyên trách & phạm vi xử lý ##\n"
+            "Để phân loại chính xác, hãy nắm rõ phạm vi xử lý của từng agent:\n"
+            "1. `booking_agent`: xử lý các yêu cầu **LIÊN QUAN TRỰC TIẾP** đến việc **TÌM KIẾM, LỰA CHỌN, ĐẶT MUA** vé máy bay và "
+            "các dịch vụ đi kèm (hành lý, suất ăn, chọn chỗ) cho một chuyển bay cụ thể mà khách hàng đang quan tâm hoặc muốn đặt.\n"
+            "2. `cancel_booking_agent`: xử lý các yêu cầu **LIÊN QUAN TRỰC TIẾP** đến việc hủy bỏ một vé đã đặt. "
+            "Yêu cầu này thường bao gồm mã đặt chỗ hoặc thông tin đủ để xác định booking cần hủy.\n"
+            "3. `general_agent`: xử lý các yêu cầu khác nằm ngoài phạm vi của các agent trên.\n\n"
 
-    Dựa trên tất cả thông tin trên, agent tiếp theo nên là gì?
-    """
+            "## Quy tắc phân loại và chuyển hướng ##"
+            "Phân tích **ý định** của người dùng một cách cẩn thận và áp dụng quy tắc sau để xác định tác tử đích:\n"
+            "1. Nếu yêu cầu rõ ràng là muốn **HỦY** vé -> chuyển hướng đến `cancel_booking_agent`.\n"
+            "2. Nếu yêu cầu rõ ràng là muốn **TÌM, CHỌN, ĐẶT MUA**` một chuyến bay hoặc dịch vụ đi kèm -> "
+            "chuyển hướng đến `booking_agent`.\n"
+            "3. Trong **TẤT CẢ các trường hợp còn lại** (bao gồm hỏi thông tin chung, quy định, thủ tục, chào hỏi, "
+            "các yêu cầu không rõ ràng hoặc không liên quan đến việc đặt/hủy cụ thể) -> Chuyển hướng đến `general_agent`"
+
+            "## Lưu ý quan trọng ##\n"
+            "Bạn **PHẢI LUÔN** phản hồi dưới dạng cấu trúc `ManagerHandoff`"
+        )"""),
+            ("user", "Yêu cầu của người dùng: {input}"),
+        ]
+    )
+
+    # Sử dụng .with_structured_output để đảm bảo LLM trả về đúng format
+    structured_llm = llm.with_structured_output(ManagerHandoff)
     
-    # Gọi LLM
-    response = llm.invoke([
-        SystemMessage(content=system_prompt_template),
-        HumanMessage(content=human_prompt)
-    ])
+    chain = prompt | structured_llm
     
-    next_agent = response.content.strip()
-    print(f">>> MANAGER quyết định: {next_agent}")
+    # Chỉ lấy tin nhắn cuối cùng của người dùng để phân tích
+    user_input = state['messages'][-1].content
+    result = chain.invoke({"input": user_input})
     
-    # Cập nhật vào state để router có thể sử dụng
-    return {"next_agent_to_call": next_agent}
+    return {"next_agent": result.target_agent_name}
