@@ -1,79 +1,68 @@
-# app.py (đặt ở thư mục gốc dự án)
-import sys
-import os
 import chainlit as cl
-from langchain_core.messages import HumanMessage, AIMessage
+import httpx
+import uuid
 
-# --- Thêm src vào sys.path để import workflow ---
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "src")))
-
-try:
-    from flight_booking_agent.graph.workflow import app as langgraph_app
-except ImportError as e:
-    print("Không thể import workflow LangGraph:", e)
-    sys.exit(1)
-
+# URL của FastAPI backend
+BASE_URL = "http://127.0.0.1:8001"  # Thay đổi nếu FastAPI của bạn chạy trên một địa chỉ khác
 
 @cl.on_chat_start
-async def start_chat():
+async def on_chat_start():
     """
-    Khi user bắt đầu cuộc trò chuyện mới:
-    - Khởi tạo một thread_id mới
-    - Khởi tạo conversation_state rỗng
+    Hàm này được gọi khi một cuộc trò chuyện mới bắt đầu.
+    Nó tạo ra một thread_id duy nhất cho mỗi cuộc trò chuyện.
     """
-    thread_id = f"thread_{cl.user_session.id}"  # mỗi user một thread_id
-    cl.user_session.set("conversation_state", {"messages": []})
-    cl.user_session.set("current_thread_id", thread_id)
+    # Tạo một thread_id mới cho mỗi phiên trò chuyện
+    thread_id = str(uuid.uuid4())
+    cl.user_session.set("thread_id", thread_id)
 
     await cl.Message(
-        content="Xin chào! Tôi là FlyAgent, trợ lý ảo chuyên đặt vé máy bay.\nBạn muốn bay từ đâu tới đâu?"
+        content=f"Xin chào! 👋 Mình là FlyAgent – trợ lý đặt vé máy bay của bạn.",
     ).send()
 
 
 @cl.on_message
-async def main(message: cl.Message):
+async def on_message(message: cl.Message):
     """
-    Xử lý mỗi tin nhắn của user:
-    - Lấy conversation_state theo thread_id
-    - Thêm tin nhắn user
-    - Stream kết quả AI
-    - Cập nhật state theo thread_id
+    Hàm này được gọi mỗi khi người dùng gửi một tin nhắn.
+    Nó gửi tin nhắn đến API FastAPI và hiển thị phản hồi.
     """
-    # Lấy thread_id hiện tại
-    thread_id = cl.user_session.get("current_thread_id")
-    conversation_state = cl.user_session.get("conversation_state")
+    thread_id = cl.user_session.get("thread_id")
 
-    # Thêm tin nhắn user vào state
-    conversation_state["messages"].append(HumanMessage(content=message.content))
+    if not thread_id:
+        # Xử lý trường hợp không tìm thấy thread_id
+        await cl.Message(
+            content="Đã xảy ra lỗi: không tìm thấy thread_id. Vui lòng thử làm mới trang."
+        ).send()
+        return
 
-    # Tạo tin nhắn trống để stream AI
-    response_message = cl.Message(content="", parent=message.id)
-    await response_message.send()
+    # Dữ liệu để gửi đến API
+    chat_request = {
+        "message": message.content,
+        "thread_id": thread_id
+    }
 
-    try:
-        # Stream các event từ LangGraph
-        async_streamer = cl.make_async(langgraph_app.stream)
-        final_state = None
+    async with httpx.AsyncClient() as client:
+        try:
+            # Gửi yêu cầu POST đến endpoint /chat
+            response = await client.post(f"{BASE_URL}/chat", json=chat_request, timeout=30.0)
+            response.raise_for_status()  # Ném ra một ngoại lệ nếu có lỗi HTTP
 
-        async for event in await async_streamer(conversation_state, thread_id=thread_id):
-            for node_name, node_output in event.items():
-                # Lấy tin nhắn mới từ node
-                new_messages = node_output.get("messages", [])
-                if new_messages:
-                    last_message = new_messages[-1]
-                    if isinstance(last_message, AIMessage) and last_message.content:
-                        await response_message.stream_token(last_message.content)
-            final_state = event
+            chat_response = response.json()
 
-        # Lưu lại state cuối cùng cho thread_id
-        if final_state:
-            # Lấy state từ node cuối cùng
-            last_state = list(final_state.values())[-1]
-            cl.user_session.set("conversation_state", last_state)
+            # Gửi phản hồi của bot trở lại giao diện người dùng
+            await cl.Message(
+                content=chat_response.get("response", "Không nhận được phản hồi hợp lệ từ bot."),
+            ).send()
 
-        # Hoàn tất tin nhắn
-        await response_message.update()
-
-    except Exception as e:
-        await cl.Message(content=f"Đã xảy ra lỗi: {e}").send()
-        cl.user_session.set("conversation_state", {"messages": []})
+        except httpx.HTTPStatusError as e:
+            await cl.Message(
+                content=f"Đã xảy ra lỗi khi giao tiếp với bot: {e.response.status_code} - {e.response.text}",
+            ).send()
+        except httpx.RequestError as e:
+            await cl.Message(
+                content=f"Đã xảy ra lỗi mạng: {e}",
+            ).send()
+        except Exception as e:
+            await cl.Message(
+                content=f"Đã xảy ra một lỗi không mong muốn: {e}",
+            ).send()

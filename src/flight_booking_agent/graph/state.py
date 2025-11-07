@@ -27,9 +27,16 @@ class AgentState(TypedDict):
     departure_date: Optional[str]
     departure_time: Optional[str]
     travel_class: Optional[Literal["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"]]
-    passenger: Optional[List[dict]]
+    passenger_count: Optional[List[dict]]
     ancillary: Optional[List[dict]]
     original_ticket_price: Optional[str]
     
-    # Kết quả tìm kiếm chuyến bay
+    # Kết quả tìm kiếm và lựa chọn
     search_results: Optional[List[dict]]
+    confirmed_flight: Optional[dict]
+
+    # THÊM TRƯỜNG MỚI ĐỂ LƯU DANH SÁCH HÀNH KHÁCH
+    passengers: Optional[List[dict]]
+    
+     # THÊM TRƯỜNG MỚI
+    final_confirmation_sent: Optional[bool] # Cờ để đánh dấu đã gửi xác nhận cuối cùng

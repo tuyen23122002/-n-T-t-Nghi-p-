@@ -15,7 +15,7 @@ class FlightSearchInput(BaseModel):
     adults: Optional[int] = Field(description="Số lượng hành khách người lớn.")
 
 @tool("flight-search-tool", args_schema=FlightSearchInput)
-def search_flights_tool(origin: str, destination: str, departure_date: str, adults: int = 1) -> str:
+def search_flights_tool(origin: str, destination: str, departure_date: str, adults: int) -> str:
     """
     Sử dụng công cụ này để tìm kiếm các chuyến bay.
     Công cụ sẽ gọi đến Amadeus API với các tham số được cung cấp.
@@ -28,7 +28,7 @@ def search_flights_tool(origin: str, destination: str, departure_date: str, adul
         destination=destination,
         departure_date=departure_date,
         adults=adults,
-        max_results=5 # Giới hạn 5 kết quả cho ngắn gọn
+        max_results=10 # Giới hạn 5 kết quả cho ngắn gọn
     )
     
     # Tool của LangChain nên trả về một chuỗi (string), vì vậy ta chuyển kết quả thành chuỗi JSON
@@ -36,3 +36,5 @@ def search_flights_tool(origin: str, destination: str, departure_date: str, adul
         return json.dumps({"error": "Xin lỗi, tôi không tìm thấy chuyến bay nào phù hợp hoặc đã có lỗi xảy ra."})
         
     return json.dumps(search_results, ensure_ascii=False, indent=2)
+
+

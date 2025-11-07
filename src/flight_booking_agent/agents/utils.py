@@ -4,12 +4,70 @@ from datetime import datetime, timedelta
 import re
 
 AIRPORT_MAP = {
+    # Việt Nam
     'hà nội': 'HAN', 'hanoi': 'HAN', 'nội bài': 'HAN',
     'hồ chí minh': 'SGN', 'ho chi minh': 'SGN', 'hcm': 'SGN',
     'sài gòn': 'SGN', 'sai gon': 'SGN', 'tân sơn nhất': 'SGN',
     'đà nẵng': 'DAD', 'da nang': 'DAD',
-    # Thêm các sân bay khác...
+    'hải phòng': 'HPH', 'cat bi': 'HPH',
+    'huế': 'HUI', 'phú bài': 'HUI',
+    'nha trang': 'CXR', 'cam ranh': 'CXR',
+    'phú quốc': 'PQC', 'phu quoc': 'PQC',
+    'cần thơ': 'VCA', 'can tho': 'VCA',
+
+    # Đông Nam Á
+    'bangkok': 'BKK', 'suvarnabhumi': 'BKK',
+    'don muang': 'DMK',
+    'singapore': 'SIN', 'changi': 'SIN',
+    'kuala lumpur': 'KUL',
+    'jakarta': 'CGK',
+    'manila': 'MNL',
+    'phnom penh': 'PNH',
+    'siem reap': 'REP',
+
+    # Đông Á
+    'tokyo': 'NRT', 'narita': 'NRT',
+    'haneda': 'HND',
+    'osaka': 'KIX',
+    'seoul': 'ICN', 'incheon': 'ICN',
+    'busan': 'PUS',
+    'đài bắc': 'TPE', 'taipei': 'TPE',
+    'hong kong': 'HKG',
+    'thượng hải': 'PVG', 'shanghai': 'PVG',
+    'bắc kinh': 'PEK', 'beijing': 'PEK',
+
+    # Trung Đông
+    'dubai': 'DXB',
+    'abu dhabi': 'AUH',
+    'doha': 'DOH',
+    'istanbul': 'IST',
+
+    # Châu Âu
+    'london': 'LHR', 'heathrow': 'LHR',
+    'paris': 'CDG', 'charles de gaulle': 'CDG',
+    'frankfurt': 'FRA',
+    'munich': 'MUC',
+    'madrid': 'MAD',
+    'barcelona': 'BCN',
+    'rome': 'FCO', 'fiumicino': 'FCO',
+    'amsterdam': 'AMS',
+    'zurich': 'ZRH',
+    'vienna': 'VIE',
+
+    # Bắc Mỹ
+    'new york': 'JFK', 'jfk': 'JFK',
+    'los angeles': 'LAX', 'la': 'LAX',
+    'san francisco': 'SFO',
+    'chicago': 'ORD',
+    'toronto': 'YYZ',
+    'vancouver': 'YVR',
+
+    # Úc
+    'sydney': 'SYD',
+    'melbourne': 'MEL',
+    'brisbane': 'BNE'
 }
+
 
 def get_iata_code(location_name: str) -> str | None:
     if not location_name: return None

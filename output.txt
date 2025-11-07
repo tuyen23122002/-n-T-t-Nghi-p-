@@ -1,3 +1,1086 @@
+Project Path: \\?\D:\Project\-n-T-t-Nghi-p-
+
+Source Tree:
+
+```
+-n-T-t-Nghi-p-
+├── app.py
+├── chainlit.md
+├── chat_history
+│   └── thread_1762317883.63536.json
+├── checkpoints.sqlite
+├── endpoints.py
+├── img
+│   └── workflow_graph.png
+├── README.md
+├── requirements.txt
+├── src
+│   ├── flight_booking_agent
+│   │   ├── agents
+│   │   │   ├── booking.py
+│   │   │   ├── cancel_booking.py
+│   │   │   ├── general.py
+│   │   │   ├── manager.py
+│   │   │   ├── router.py
+│   │   │   ├── utils.py
+│   │   │   ├── __init__.py
+│   │   │   └── __pycache__
+│   │   │       ├── booking.cpython-310.pyc
+│   │   │       ├── booking_manager.cpython-310.pyc
+│   │   │       ├── cancel_booking.cpython-310.pyc
+│   │   │       ├── flight_searcher.cpython-310.pyc
+│   │   │       ├── general.cpython-310.pyc
+│   │   │       ├── information_gatherer.cpython-310.pyc
+│   │   │       ├── manager.cpython-310.pyc
+│   │   │       ├── recommendation.cpython-310.pyc
+│   │   │       ├── router.cpython-310.pyc
+│   │   │       ├── utils.cpython-310.pyc
+│   │   │       └── __init__.cpython-310.pyc
+│   │   ├── api
+│   │   │   ├── endpoints.py
+│   │   │   ├── schemas.py
+│   │   │   └── __init__.py
+│   │   ├── config.py
+│   │   ├── graph
+│   │   │   ├── state.py
+│   │   │   ├── workflow.py
+│   │   │   ├── __init__.py
+│   │   │   └── __pycache__
+│   │   │       ├── state.cpython-310.pyc
+│   │   │       ├── workflow.cpython-310.pyc
+│   │   │       └── __init__.cpython-310.pyc
+│   │   ├── output.txt
+│   │   ├── services
+│   │   │   ├── amadeus_client.py
+│   │   │   ├── payment_client.py
+│   │   │   ├── skyscanner_client.py
+│   │   │   ├── __init__.py
+│   │   │   └── __pycache__
+│   │   │       ├── amadeus_client.cpython-310.pyc
+│   │   │       └── __init__.cpython-310.pyc
+│   │   ├── tools
+│   │   │   ├── booking_tools.py
+│   │   │   ├── cancel_tools.py
+│   │   │   ├── general_tools.py
+│   │   │   ├── __init__.py
+│   │   │   └── __pycache__
+│   │   │       ├── booking_tools.cpython-310.pyc
+│   │   │       ├── flight_tools.cpython-310.pyc
+│   │   │       ├── general_tools.cpython-310.pyc
+│   │   │       └── __init__.cpython-310.pyc
+│   │   ├── __init__.py
+│   │   └── __pycache__
+│   │       ├── config.cpython-310.pyc
+│   │       └── __init__.cpython-310.pyc
+│   ├── __init__.py
+│   └── __pycache__
+│       └── __init__.cpython-310.pyc
+├── tests
+│   ├── test_agents.py
+│   ├── test_tools.py
+│   ├── test_workflow.py
+│   └── __init__.py
+└── __pycache__
+    ├── app.cpython-310.pyc
+    ├── endpoints.cpython-310.pyc
+    └── endpoints.cpython-313.pyc
+
+```
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\app.py`:
+
+```````py
+import chainlit as cl
+import httpx
+import uuid
+
+# URL của FastAPI backend
+BASE_URL = "http://127.0.0.1:8001"  # Thay đổi nếu FastAPI của bạn chạy trên một địa chỉ khác
+
+@cl.on_chat_start
+async def on_chat_start():
+    """
+    Hàm này được gọi khi một cuộc trò chuyện mới bắt đầu.
+    Nó tạo ra một thread_id duy nhất cho mỗi cuộc trò chuyện.
+    """
+    # Tạo một thread_id mới cho mỗi phiên trò chuyện
+    thread_id = str(uuid.uuid4())
+    cl.user_session.set("thread_id", thread_id)
+
+    await cl.Message(
+        content=f"Xin chào! 👋 Mình là FlyAgent – trợ lý đặt vé máy bay của bạn.",
+    ).send()
+
+
+@cl.on_message
+async def on_message(message: cl.Message):
+    """
+    Hàm này được gọi mỗi khi người dùng gửi một tin nhắn.
+    Nó gửi tin nhắn đến API FastAPI và hiển thị phản hồi.
+    """
+    thread_id = cl.user_session.get("thread_id")
+
+    if not thread_id:
+        # Xử lý trường hợp không tìm thấy thread_id
+        await cl.Message(
+            content="Đã xảy ra lỗi: không tìm thấy thread_id. Vui lòng thử làm mới trang."
+        ).send()
+        return
+
+    # Dữ liệu để gửi đến API
+    chat_request = {
+        "message": message.content,
+        "thread_id": thread_id
+    }
+
+    async with httpx.AsyncClient() as client:
+        try:
+            # Gửi yêu cầu POST đến endpoint /chat
+            response = await client.post(f"{BASE_URL}/chat", json=chat_request, timeout=30.0)
+            response.raise_for_status()  # Ném ra một ngoại lệ nếu có lỗi HTTP
+
+            chat_response = response.json()
+
+            # Gửi phản hồi của bot trở lại giao diện người dùng
+            await cl.Message(
+                content=chat_response.get("response", "Không nhận được phản hồi hợp lệ từ bot."),
+            ).send()
+
+        except httpx.HTTPStatusError as e:
+            await cl.Message(
+                content=f"Đã xảy ra lỗi khi giao tiếp với bot: {e.response.status_code} - {e.response.text}",
+            ).send()
+        except httpx.RequestError as e:
+            await cl.Message(
+                content=f"Đã xảy ra lỗi mạng: {e}",
+            ).send()
+        except Exception as e:
+            await cl.Message(
+                content=f"Đã xảy ra một lỗi không mong muốn: {e}",
+            ).send()
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\chainlit.md`:
+
+```````md
+# Welcome to Chainlit! 🚀🤖
+
+Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+
+## Useful Links 🔗
+
+- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
+- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+
+We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+
+## Welcome screen
+
+To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\chat_history\thread_1762317883.63536.json`:
+
+```````json
+{
+  "thread_id": "thread_1762317883.63536",
+  "title": "helo",
+  "created_at": "2025-11-05T11:44:53.146368",
+  "updated_at": "2025-11-05T11:44:53.146368",
+  "messages": [
+    {
+      "type": "human",
+      "content": "helo"
+    }
+  ]
+}
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\endpoints.py`:
+
+```````py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List, Optional
+from langchain_core.messages import HumanMessage
+import traceback
+
+from src.flight_booking_agent.graph.workflow import app as graph_app
+
+fastapi_app = FastAPI()
+
+class ChatRequest(BaseModel):
+    message: str
+    thread_id: str  
+    
+class ChatResponse(BaseModel):
+    response: str
+    thread_id: str
+
+@fastapi_app.post("/chat", response_model=ChatResponse)
+async def chat_endpoint(request: ChatRequest):
+    """
+    Endpoint xử lý chat với checkpoint.
+    Mỗi thread_id đại diện cho 1 cuộc hội thoại riêng biệt.
+    """
+    try:
+        # Config với thread_id để LangGraph biết load state nào
+        config = {
+            "configurable": {
+                "thread_id": request.thread_id
+            }
+        }
+        
+        # Invoke graph với checkpoint
+        result = graph_app.invoke(
+            {"messages": [HumanMessage(content=request.message)]},
+            config=config
+        )
+        
+        # Lấy response cuối cùng
+        last_message = result["messages"][-1]
+        
+        return ChatResponse(
+            response=last_message.content,
+            thread_id=request.thread_id
+        )
+        
+    except Exception as e:
+        # 2. Đảm bảo bạn có những dòng này để in lỗi chi tiết
+        print("\n--- TRACEBACK LỖI CHI TIẾT ---")
+        traceback.print_exc()
+        print("------------------------------\n")
+        
+        # 3. Dòng raise HTTPException phải nằm cuối cùng
+        raise HTTPException(status_code=500, detail=str(e))
+
+@fastapi_app.get("/history/{thread_id}")
+async def get_conversation_history(thread_id: str):
+    """
+    Lấy lịch sử hội thoại của một thread_id
+    """
+    try:
+        config = {"configurable": {"thread_id": thread_id}}
+        
+        # Lấy state hiện tại từ checkpoint
+        state = graph_app.get_state(config)
+        
+        if state and state.values.get("messages"):
+            messages = state.values["messages"]
+            return {
+                "thread_id": thread_id,
+                "messages": [
+                    {
+                        "type": type(msg).__name__,
+                        "content": msg.content
+                    }
+                    for msg in messages
+                ]
+            }
+        else:
+            return {"thread_id": thread_id, "messages": []}
+            
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@fastapi_app.delete("/history/{thread_id}")
+async def clear_conversation(thread_id: str):
+    """
+    Xóa lịch sử hội thoại của một thread_id
+    """
+    try:
+        # Trong SQLite checkpoint, không có API trực tiếp để xóa
+        # Bạn có thể tạo thread_id mới thay vì xóa
+        return {"message": f"Để bắt đầu cuộc hội thoại mới, hãy dùng thread_id khác"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\README.md`:
+
+```````md
+# Cách chạy code backend: python -m uvicorn endpoints:fastapi_app --reload --port 8001
+
+# Fontend: chainlit run app.py -w         
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\requirements.txt`:
+
+```````txt
+amadeus==12.0.0
+annotated-types==0.7.0
+anyio==4.11.0
+async-timeout==4.0.3
+cachetools==5.5.2
+certifi==2025.8.3
+charset-normalizer==3.4.3
+distro==1.9.0
+exceptiongroup==1.3.0
+filetype==1.2.0
+google-ai-generativelanguage==0.7.0
+google-api-core==2.25.1
+google-auth==2.40.3
+googleapis-common-protos==1.70.0
+greenlet==3.2.4
+grpcio==1.75.0
+grpcio-status==1.75.0
+h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
+idna==3.10
+jiter==0.11.0
+jsonpatch==1.33
+jsonpointer==3.0.0
+langchain==0.3.27
+langchain-core==0.3.76
+langchain-google-genai==2.1.12
+langchain-openai==0.3.33
+langchain-text-splitters==0.3.11
+langgraph==0.6.7
+langgraph-checkpoint==2.1.1
+langgraph-prebuilt==0.6.4
+langgraph-sdk==0.2.9
+langsmith==0.4.31
+openai==1.109.1
+orjson==3.11.3
+ormsgpack==1.10.0
+packaging==25.0
+proto-plus==1.26.1
+protobuf==6.32.1
+pyasn1==0.6.1
+pyasn1_modules==0.4.2
+pydantic==2.11.9
+pydantic_core==2.33.2
+python-dotenv==1.1.1
+PyYAML==6.0.3
+regex==2025.9.18
+requests==2.32.5
+requests-toolbelt==1.0.0
+rsa==4.9.1
+sniffio==1.3.1
+SQLAlchemy==2.0.43
+tenacity==9.1.2
+tiktoken==0.11.0
+tqdm==4.67.1
+typing-inspection==0.4.1
+typing_extensions==4.15.0
+urllib3==2.5.0
+xxhash==3.5.0
+zstandard==0.25.0
+langchain_google_vertexai
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\booking.py`:
+
+```````py
+import json
+from langchain_core.messages import SystemMessage, HumanMessage, ToolMessage, AIMessage
+from pydantic import BaseModel, Field
+from typing import Optional, List
+
+from ..graph.state import AgentState
+from ..config import llm
+from ..tools.booking_tools import search_flights_tool
+from .utils import get_iata_code, convert_relative_date, filter_for_human_ai
+
+class FlightInfoExtractor(BaseModel):
+    """Trích xuất thông tin chuyến bay từ tin nhắn của người dùng."""
+    departure_city: Optional[str] = Field(None, description="Thành phố hoặc sân bay điểm đi")
+    destination_city: Optional[str] = Field(None, description="Thành phố hoặc sân bay điểm đến")
+    departure_date: Optional[str] = Field(None, description="Ngày đi, ví dụ: 'hôm nay', 'ngày mai', '25/12'")
+    passenger_count: Optional[int] = Field(None, description="Số lượng hành khách người lớn")
+
+# --- Pydantic model để hiểu lựa chọn chuyến bay ---
+class FlightChoice(BaseModel):
+    """Xác định lựa chọn chuyến bay của người dùng từ một danh sách."""
+    choice_index: Optional[int] = Field(None, description="Chỉ số (bắt đầu từ 1) của chuyến bay người dùng chọn.")
+    is_confirmed: bool = Field(False, description="True nếu người dùng chắc chắn chọn chuyến bay.")
+
+# --- Pydantic model MỚI để trích xuất thông tin hành khách ---
+class PassengerInfo(BaseModel):
+    """Thông tin chi tiết của một hành khách."""
+    full_name: str = Field(description="Họ và tên đầy đủ của hành khách, viết không dấu. Ví dụ: Nguyen Van A")
+    date_of_birth: str = Field(description="Ngày tháng năm sinh theo định dạng DD/MM/YYYY. Ví dụ: 25/12/1990")
+    phone_number: str = Field(description="Số điện thoại liên lạc. Ví dụ: 0987654321")
+
+class PassengerInfoExtractor(BaseModel):
+    """Trích xuất danh sách thông tin của một hoặc nhiều hành khách."""
+    passengers: List[PassengerInfo] = Field(description="Danh sách thông tin các hành khách được cung cấp.")
+
+# --- LLM và System Prompt ---
+booking_llm = llm.bind_tools([search_flights_tool])
+SYSTEM_PROMPT = """Bạn là **Vivi**, một trợ lý ảo chuyên hỗ trợ những vấn đề liên quan đến đặt vé máy bay.
+        Luôn giao tiếp thân thiện, gọi khách là anh/chị và xưng em.
+        Luôn tuân thủ chặt chẽ quy trình nghiệp vụ từng bước.
+        Khi nhận được kết quả từ tool, hãy tóm tắt nó cho người dùng và đề xuất bước tiếp theo.
+        Nếu yêu cầu của khách hàng không liên quan đến đặt vé, hãy nói chính xác câu: "Về vấn đề này, em xin phép chuyển cho một chuyên viên khác." và không làm gì thêm.
+"""
+
+def booking_node(state: AgentState) -> dict:
+    """
+    Node xử lý toàn bộ nghiệp vụ đặt vé máy bay một cách tuần tự.
+    (Phiên bản tái cấu trúc với logic if/elif/else để sửa lỗi vòng lặp)
+    """
+    print("---NODE: BOOKING---")
+    messages = list(state['messages'])
+    current_agent = "booking_agent"
+
+    # ==============================================================================
+    # ƯU TIÊN 1: Xử lý kết quả vừa nhận được từ Tool
+    # ==============================================================================
+    if isinstance(messages[-1], ToolMessage):
+        print(">>> Booking Node [State 1]: Đang xử lý kết quả từ Tool...")
+        try:
+            search_results_data = json.loads(messages[-1].content)
+        except (json.JSONDecodeError, TypeError):
+            search_results_data = {"error": "Dữ liệu trả về từ tool không hợp lệ."}
+
+        prompt = HumanMessage(
+            content=f"""Dựa vào kết quả từ tool call sau đây:
+            ---
+            {json.dumps(search_results_data, ensure_ascii=False, indent=2)}
+            ---
+            Hãy tóm tắt kết quả cho người dùng dưới dạng danh sách gạch đầu dòng, mỗi chuyến bay gồm: Mã hiệu, giờ cất cánh, giờ hạ cánh, và giá vé.
+            Đánh số thứ tự cho các chuyến bay bắt đầu từ 1. Sau đó hỏi họ muốn chọn chuyến bay nào.
+            """
+        )
+        response = booking_llm.invoke([SystemMessage(content=SYSTEM_PROMPT), prompt])
+        
+        # **SỬA LỖI TẠI ĐÂY:** Trả về một dictionary chỉ chứa các trường cần cập nhật
+        # LangGraph sẽ tự động merge dict này vào state chung.
+        return {
+            "messages": [response],
+            "search_results": search_results_data, # Quan trọng nhất là bước này
+            "previous_agent": current_agent
+        }
+
+    # ==============================================================================
+    # ƯU TIÊN 2: Đã có kết quả, xử lý lựa chọn chuyến bay của người dùng
+    # ==============================================================================
+    elif state.get("search_results"):
+        print(">>> Booking Node [State 2]: Đã có kết quả, xử lý lựa chọn của người dùng...")
+        
+        # Dùng LLM có cấu trúc để hiểu lựa chọn của người dùng
+        structured_llm_choice = llm.with_structured_output(FlightChoice)
+        choice_prompt = f"""Dưới đây là danh sách các chuyến bay đã được cung cấp (đánh số từ 1):
+        {json.dumps(state["search_results"], ensure_ascii=False, indent=2)}
+
+        Và đây là phản hồi của người dùng: "{messages[-1].content}"
+
+        Dựa vào phản hồi, hãy xác định xem người dùng đã chọn chuyến bay nào (dựa trên số thứ tự) và đã xác nhận lựa chọn đó chưa.
+        """
+        user_choice = structured_llm_choice.invoke(choice_prompt)
+
+        # Nếu người dùng đã chọn và xác nhận
+        if user_choice.is_confirmed and user_choice.choice_index is not None and 1 <= user_choice.choice_index <= len(state["search_results"]):
+            # Trừ 1 vì index của list bắt đầu từ 0
+            chosen_flight = state["search_results"][user_choice.choice_index - 1]
+            
+            passenger_count = state.get("passenger_count", 1)
+            instructional_prompt = HumanMessage(
+                content=f"""
+                [Instruction] Người dùng vừa chọn chuyến bay sau đây:
+                {json.dumps(chosen_flight, ensure_ascii=False, indent=2)}
+
+                Nhiệm vụ của bạn bây giờ là:
+                1. Dùng văn phong thân thiện, xác nhận lại với người dùng rằng bạn đã ghi nhận lựa chọn của họ (ví dụ: "Dạ em xác nhận anh/chị đã chọn chuyến bay...").
+                2. Yêu cầu người dùng cung cấp thông tin cho {passenger_count} hành khách lần lượt bao gồm: Họ và tên, Ngày sinh (theo định dạng DD/MM/YYYY), và Số điện thoại.
+                """
+            )
+            
+            # Lọc tin nhắn để giữ ngữ cảnh sạch và thêm chỉ thị vào cuối
+            filtered_messages = filter_for_human_ai(messages)[-6:]
+            final_prompt =  [SystemMessage(content=SYSTEM_PROMPT)] + filtered_messages + [instructional_prompt]
+            
+            # Gọi LLM để tạo ra câu trả lời tự nhiên
+            response = booking_llm.invoke(final_prompt)
+            
+            return {
+                "messages": [response],
+                "confirmed_flight": chosen_flight,
+                "search_results": None, # Xóa kết quả tìm kiếm cũ để tránh vào lại state này
+                "previous_agent": current_agent
+            }
+        
+        # Nếu người dùng chưa chọn rõ ràng, hỏi lại hoặc xử lý câu hỏi phụ
+        else:
+            response = booking_llm.invoke(filter_for_human_ai(messages)[-6:])
+            return {"messages": [response], "previous_agent": current_agent}
+        
+         # ==============================================================================
+    # STATE 4 (ĐÃ SỬA LỖI TRIỆT ĐỂ): Thu thập thông tin hành khách
+    # ==============================================================================
+    elif state.get("confirmed_flight") and len(state.get("passengers", [])) < state.get("passenger_count", 1):
+        print(f">>> Booking Node [State 4]: Thu thập thông tin hành khách...")
+        
+        structured_llm_pax = llm.with_structured_output(PassengerInfoExtractor)
+        extractor_prompt = f"Trích xuất toàn bộ thông tin hành khách từ nội dung sau. Input: \"{messages[-1].content}\""
+        
+        try:
+            extracted_data = structured_llm_pax.invoke(extractor_prompt)
+            newly_extracted_passengers = [p.dict() for p in extracted_data.passengers]
+        except Exception:
+            newly_extracted_passengers = []
+
+        if not newly_extracted_passengers:
+            response = AIMessage(content="Dạ em chưa nhận được thông tin hành khách. Anh/chị vui lòng cung cấp lần lượt Họ tên, Ngày sinh (DD/MM/YYYY), và Số điện thoại ạ.")
+            updates = {"messages": state["messages"] + [response], "previous_agent": current_agent}
+            return {**state, **updates}
+
+        current_passengers = state.get("passengers", [])
+        all_passengers = current_passengers + newly_extracted_passengers
+        
+        remaining = state.get("passenger_count", 1) - len(all_passengers)
+
+        # KỊCH BẢN 1: Vẫn còn thiếu thông tin -> Tạo tin nhắn và DỪNG LẠI
+        if remaining > 0:
+            print(f">>> Booking Node [State 4]: Vẫn còn thiếu {remaining} hành khách. Yêu cầu nhập thêm...")
+            response_content = f"Dạ em đã ghi nhận thông tin. Anh/chị vui lòng cung cấp thông tin cho {remaining} hành khách còn lại ạ."
+            response = AIMessage(content=response_content)
+            updates = {
+                "messages": state["messages"] + [response],
+                "passengers": all_passengers,
+                "previous_agent": current_agent
+            }
+            return {**state, **updates}
+
+        # KỊCH BẢN 2: Đã thu thập đủ thông tin -> KHÔNG tạo tin nhắn và CHẠY TIẾP
+        else:
+            ### =================================================================
+            ### BÊN TRONG ELSE: THỰC HIỆN LOGIC CỦA STATE 5
+            ### =================================================================
+            print(">>> Booking Node [State 5]: Đã đủ thông tin, bắt đầu tổng kết...")
+            
+            flight_info = state.get("confirmed_flight", {})
+            passenger_info = state.get("passengers", [])
+            passenger_count = state.get("passenger_count", 1)
+            price_per_ticket = flight_info.get("price", 0)
+            total_price = price_per_ticket * passenger_count
+
+            instructional_prompt = HumanMessage(content=f"[INSTRUCTION] Bạn đã thu thập đủ thông tin. Bây giờ là bước cuối cùng trước khi thanh toán.\nDữ liệu đã thu thập:\n- Thông tin chuyến bay (giá này là giá cho 1 người): {json.dumps(flight_info, ensure_ascii=False, indent=2)}\n- Thông tin hành khách: {json.dumps(passenger_info, ensure_ascii=False, indent=2)}\n- Số lượng vé: {passenger_count}\n- **TỔNG CHI PHÍ CUỐI CÙNG (ĐÃ TÍNH TOÁN): {total_price} VND**\n\nNhiệm vụ của bạn:\n1. Hiển thị lại **TOÀN BỘ** thông tin đặt vé trên cho người dùng một cách rõ ràng, mạch lạc, chuyên nghiệp.\n2. **QUAN TRỌNG:** Khi hiển thị phần 'Tổng chi phí', hãy sử dụng con số **TỔNG CHI PHÍ CUỐI CÙNG** đã được tính toán ở trên, không dùng giá vé trong 'Thông tin chuyến bay'.\n3. Yêu cầu người dùng kiểm tra lại thật kỹ các thông tin.\n4. **BẮT BUỘC** phải yêu cầu người dùng phản hồi chính xác bằng từ `xác nhận` để tiếp tục.")
+            final_prompt = [SystemMessage(content=SYSTEM_PROMPT)] + filter_for_human_ai(messages)[-6:] + [instructional_prompt]
+            response = booking_llm.invoke(final_prompt)
+            updates = {"messages": state["messages"] + [response], "final_confirmation_sent": True, "previous_agent": current_agent}
+            return {**state, **updates}
+  
+    # ==============================================================================
+    # ƯU TIÊN 3 (CUỐI CÙNG): Thu thập thông tin và kích hoạt tìm kiếm mới
+    # ==============================================================================
+    else:
+        print(">>> Booking Node [State 3]: Thu thập thông tin...")
+        structured_llm = llm.with_structured_output(FlightInfoExtractor)
+        extractor_prompt = f"Trích xuất thông tin chuyến bay từ câu sau. Input: \"{messages[-1].content}\""
+        extracted_info = structured_llm.invoke(extractor_prompt)
+
+        # Tạo một dictionary để cập nhật thông tin
+        updates = {}
+        if extracted_info.departure_city: updates["departure_from"] = get_iata_code(extracted_info.departure_city)
+        if extracted_info.destination_city: updates["arrival_to"] = get_iata_code(extracted_info.destination_city)
+        if extracted_info.departure_date: updates["departure_date"] = convert_relative_date(extracted_info.departure_date)
+        if extracted_info.passenger_count: updates["passenger_count"] = extracted_info.passenger_count
+
+        # Lấy thông tin hiện tại từ state và cập nhật nó
+        current_info = {
+            "departure_from": state.get("departure_from"),
+            "arrival_to": state.get("arrival_to"),
+            "departure_date": state.get("departure_date"),
+            "passenger_count": state.get("passenger_count"),
+        }
+        current_info.update(updates)
+
+        if all(current_info.values()):
+            print(">>> Booking Node: Đủ thông tin, chuẩn bị gọi Tool tìm kiếm...")
+            tool_input_message = HumanMessage(content=f"Tìm chuyến bay từ {current_info['departure_from']} đến {current_info['arrival_to']} vào ngày {current_info['departure_date']} cho {current_info['passenger_count']} hành khách.")
+            response_with_tool_call = booking_llm.invoke([SystemMessage(content=SYSTEM_PROMPT), tool_input_message])
+            
+            # Cập nhật state với thông tin đã thu thập và tool call
+            return {**updates, "messages": [response_with_tool_call], "previous_agent": current_agent}
+        
+        required_info_map = {"điểm đi": "departure_from", "điểm đến": "arrival_to", "ngày đi": "departure_date", "số lượng vé": "passenger_count"}
+        missing_info = [name for name, key in required_info_map.items() if not current_info.get(key)]
+
+        if missing_info:
+            print(f">>> Booking Node: Thiếu thông tin: {missing_info}")
+            ask_prompt = f"Dạ, để tìm chuyến bay, anh/chị vui lòng cho em biết thêm về {', '.join(missing_info)} ạ."
+            response = AIMessage(content=ask_prompt)
+            # Cập nhật state với thông tin đã có và tin nhắn hỏi thêm
+            return {**updates, "messages": [response], "previous_agent": current_agent}
+
+        # Trường hợp không thể xử lý
+        response = AIMessage(content="Dạ em xin lỗi, em chưa hiểu rõ yêu cầu của mình. Anh/chị có thể cho em biết điểm đi, điểm đến và ngày đi được không ạ?")
+        return {"messages": [response], "previous_agent": current_agent}
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\cancel_booking.py`:
+
+```````py
+# src/flight_booking_agent/agents/cancel_booking.py
+from langchain_core.messages import AIMessage
+from ..graph.state import AgentState
+
+# Giả lập các tool có thể cần
+# from ..tools.booking_tools import cancel_booking
+
+# Giả lập llm
+# from ..config import llm
+
+def cancel_booking_node(state: AgentState) -> dict:
+    """
+    NODE GIẢ LẬP: Xử lý nghiệp vụ hủy vé.
+    Trong tương lai, node này sẽ chứa logic để gọi tool hủy vé.
+    """
+    print("---NODE: CANCEL BOOKING (Placeholder)---")
+    
+    # Hiện tại, chỉ trả về một tin nhắn thông báo
+    response_message = AIMessage(content="Dạ, để hủy vé, anh/chị vui lòng cung cấp mã đặt chỗ ạ.")
+    
+    return {
+        "messages": [response_message],
+        "previous_agent": "cancel_booking_agent"
+    }
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\general.py`:
+
+```````py
+# src/flight_booking_agent/agents/information_gatherer.py
+import json
+from datetime import datetime, timedelta
+from typing import Optional
+# SỬA LỖI PYDANTIC: Import trực tiếp từ pydantic
+from pydantic import BaseModel, Field
+from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
+
+from ..config import llm
+from ..graph.state import AgentState
+
+from .utils import get_iata_code, convert_relative_date
+
+
+# === THÊM HÀM MỚI TẠI ĐÂY ===
+def general_node(state: AgentState) -> dict:
+    """
+    NODE GIẢ LẬP: Xử lý các câu hỏi chung.
+    Trong tương lai, node này sẽ chứa logic để gọi RAG hoặc các tool kiến thức chung.
+    """
+    print("---NODE: GENERAL (Placeholder)---")
+    
+    # Hiện tại, chỉ trả về một tin nhắn thông báo chung
+    response_message = AIMessage(content="Dạ, em có thể giúp gì khác cho anh/chị ạ?")
+    
+    return {
+        "messages": [response_message],
+        "previous_agent": "general_agent"
+    }
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\manager.py`:
+
+```````py
+from langchain_core.prompts import ChatPromptTemplate
+from pydantic import BaseModel, Field
+from typing import Literal
+from ..graph.state import AgentState
+from ..config import llm
+
+# Pydantic model để định nghĩa output có cấu trúc cho Manager
+class ManagerHandoff(BaseModel):
+    target_agent_name: Literal["booking_agent", "general_agent", "cancel_booking_agent", "END"] = Field(
+        ..., description="Agent chuyên trách phù hợp để xử lý yêu cầu."
+    )
+
+def manager_node(state: AgentState) -> dict:
+    """
+    Node điều phối: Phân tích yêu cầu và quyết định agent tiếp theo.
+    """
+    
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            ("system",
+             """"## Vai trò ##"
+            "Bạn là **Vivi**, là một trợ lý ảo đóng vai trò điều phối viên, "
+            "Nhiệm vụ **DUY NHẤT** của bạn là phân tích yêu cầu của người dùng và "
+            "**chuyển hướng chính xác** đến agent chuyên trách phù hợp. "
+            "Bạn **TUYỆT ĐỐI KHÔNG** được tự mình trả lời bất kỳ câu hỏi nào của khách hàng.\n\n"
+
+            "## Các agent chuyên trách & phạm vi xử lý ##\n"
+            "Để phân loại chính xác, hãy nắm rõ phạm vi xử lý của từng agent:\n"
+            "1. `booking_agent`: xử lý các yêu cầu **LIÊN QUAN TRỰC TIẾP** đến việc **TÌM KIẾM, LỰA CHỌN, ĐẶT MUA** vé máy bay và "
+            "các dịch vụ đi kèm (hành lý, suất ăn, chọn chỗ) cho một chuyển bay cụ thể mà khách hàng đang quan tâm hoặc muốn đặt.\n"
+            "2. `cancel_booking_agent`: xử lý các yêu cầu **LIÊN QUAN TRỰC TIẾP** đến việc hủy bỏ một vé đã đặt. "
+            "Yêu cầu này thường bao gồm mã đặt chỗ hoặc thông tin đủ để xác định booking cần hủy.\n"
+            "3. `general_agent`: xử lý các yêu cầu khác nằm ngoài phạm vi của các agent trên.\n\n"
+
+            "## Quy tắc phân loại và chuyển hướng ##"
+            "Phân tích **ý định** của người dùng một cách cẩn thận và áp dụng quy tắc sau để xác định tác tử đích:\n"
+            "1. Nếu yêu cầu rõ ràng là muốn **HỦY** vé -> chuyển hướng đến `cancel_booking_agent`.\n"
+            "2. Nếu yêu cầu rõ ràng là muốn **TÌM, CHỌN, ĐẶT MUA**` một chuyến bay hoặc dịch vụ đi kèm -> "
+            "chuyển hướng đến `booking_agent`.\n"
+            "3. Trong **TẤT CẢ các trường hợp còn lại** (bao gồm hỏi thông tin chung, quy định, thủ tục, chào hỏi, "
+            "các yêu cầu không rõ ràng hoặc không liên quan đến việc đặt/hủy cụ thể) -> Chuyển hướng đến `general_agent`"
+
+            "## Lưu ý quan trọng ##\n"
+            "Bạn **PHẢI LUÔN** phản hồi dưới dạng cấu trúc `ManagerHandoff`"
+        )"""),
+            ("user", "Yêu cầu của người dùng: {input}"),
+        ]
+    )
+
+    # Sử dụng .with_structured_output để đảm bảo LLM trả về đúng format
+    structured_llm = llm.with_structured_output(ManagerHandoff)
+    
+    chain = prompt | structured_llm
+    
+    # Chỉ lấy tin nhắn cuối cùng của người dùng để phân tích
+    user_input = state['messages'][-1].content
+    result = chain.invoke({"input": user_input})
+    
+    return {"next_agent": result.target_agent_name}
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\router.py`:
+
+```````py
+from ..graph.state import AgentState
+
+SPECIALIST_AGENTS = ["booking_agent", "cancel_booking_agent", "general_agent"]
+
+def proxy_router_node(state: AgentState) -> dict:
+    previous_agent = state.get("previous_agent")
+
+    # Nếu chưa từng gọi agent nào → đi qua manager
+    if previous_agent is None:
+        return {"next_agent": "manager"}
+
+    # Nếu đã có agent và agent đó thuộc nhóm chuyên trách → quay lại đúng agent đó
+    if previous_agent in SPECIALIST_AGENTS:
+        return {"next_agent": previous_agent}
+
+    # Mặc định → vẫn về manager
+    return {"next_agent": "manager"}
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\agents\utils.py`:
+
+```````py
+from langchain_core.messages import BaseMessage, HumanMessage, AIMessage
+from typing import List
+from datetime import datetime, timedelta
+import re
+
+AIRPORT_MAP = {
+    # Việt Nam
+    'hà nội': 'HAN', 'hanoi': 'HAN', 'nội bài': 'HAN',
+    'hồ chí minh': 'SGN', 'ho chi minh': 'SGN', 'hcm': 'SGN',
+    'sài gòn': 'SGN', 'sai gon': 'SGN', 'tân sơn nhất': 'SGN',
+    'đà nẵng': 'DAD', 'da nang': 'DAD',
+    'hải phòng': 'HPH', 'cat bi': 'HPH',
+    'huế': 'HUI', 'phú bài': 'HUI',
+    'nha trang': 'CXR', 'cam ranh': 'CXR',
+    'phú quốc': 'PQC', 'phu quoc': 'PQC',
+    'cần thơ': 'VCA', 'can tho': 'VCA',
+
+    # Đông Nam Á
+    'bangkok': 'BKK', 'suvarnabhumi': 'BKK',
+    'don muang': 'DMK',
+    'singapore': 'SIN', 'changi': 'SIN',
+    'kuala lumpur': 'KUL',
+    'jakarta': 'CGK',
+    'manila': 'MNL',
+    'phnom penh': 'PNH',
+    'siem reap': 'REP',
+
+    # Đông Á
+    'tokyo': 'NRT', 'narita': 'NRT',
+    'haneda': 'HND',
+    'osaka': 'KIX',
+    'seoul': 'ICN', 'incheon': 'ICN',
+    'busan': 'PUS',
+    'đài bắc': 'TPE', 'taipei': 'TPE',
+    'hong kong': 'HKG',
+    'thượng hải': 'PVG', 'shanghai': 'PVG',
+    'bắc kinh': 'PEK', 'beijing': 'PEK',
+
+    # Trung Đông
+    'dubai': 'DXB',
+    'abu dhabi': 'AUH',
+    'doha': 'DOH',
+    'istanbul': 'IST',
+
+    # Châu Âu
+    'london': 'LHR', 'heathrow': 'LHR',
+    'paris': 'CDG', 'charles de gaulle': 'CDG',
+    'frankfurt': 'FRA',
+    'munich': 'MUC',
+    'madrid': 'MAD',
+    'barcelona': 'BCN',
+    'rome': 'FCO', 'fiumicino': 'FCO',
+    'amsterdam': 'AMS',
+    'zurich': 'ZRH',
+    'vienna': 'VIE',
+
+    # Bắc Mỹ
+    'new york': 'JFK', 'jfk': 'JFK',
+    'los angeles': 'LAX', 'la': 'LAX',
+    'san francisco': 'SFO',
+    'chicago': 'ORD',
+    'toronto': 'YYZ',
+    'vancouver': 'YVR',
+
+    # Úc
+    'sydney': 'SYD',
+    'melbourne': 'MEL',
+    'brisbane': 'BNE'
+}
+
+
+def get_iata_code(location_name: str) -> str | None:
+    if not location_name: return None
+    normalized = location_name.lower().strip()
+    
+    # Nếu người dùng nhập thẳng mã IATA (3 chữ cái)
+    if len(normalized) == 3 and normalized.isalpha():
+        return normalized.upper()
+        
+    return AIRPORT_MAP.get(normalized)
+
+def convert_relative_date(date_str: str) -> str:
+    """
+    Chuyển đổi các ngày tương đối hoặc định dạng dd/mm sang định dạng 'YYYY-MM-DD'.
+
+    Supported:
+        - "hôm nay"
+        - "ngày mai"
+        - "ngày mốt"
+        - "dd/mm" hoặc "dd-mm"
+        - "YYYY-mm-dd" (trả về nguyên bản nếu đúng định dạng)
+    """
+    date_str = date_str.strip().lower()
+    today = datetime.now()
+
+    if date_str in ["hôm nay", "hom nay"]:
+        return today.strftime("%Y-%m-%d")
+    elif date_str in ["ngày mai", "ngay mai"]:
+        return (today + timedelta(days=1)).strftime("%Y-%m-%d")
+    elif date_str in ["ngày mốt", "ngay mot"]:
+        return (today + timedelta(days=2)).strftime("%Y-%m-%d")
+    
+    # Kiểm tra định dạng dd/mm hoặc dd-mm
+    match = re.match(r"(\d{1,2})[/-](\d{1,2})", date_str)
+    if match:
+        day, month = map(int, match.groups())
+        year = today.year
+        try:
+            dt = datetime(year, month, day)
+            # Nếu ngày đã qua trong năm hiện tại, tự động lấy năm sau
+            if dt < today:
+                dt = datetime(year + 1, month, day)
+            return dt.strftime("%Y-%m-%d")
+        except ValueError:
+            raise ValueError(f"Ngày không hợp lệ: {date_str}")
+
+    # Kiểm tra xem có phải là ISO format YYYY-MM-DD không
+    try:
+        dt = datetime.strptime(date_str, "%Y-%m-%d")
+        return dt.strftime("%Y-%m-%d")
+    except ValueError:
+        pass
+
+    raise ValueError(f"Không thể nhận dạng ngày: {date_str}")
+
+# Xử lí tin nhắn hội thoại
+def filter_for_human_ai(messages: List[BaseMessage]) -> List[BaseMessage]:
+    """
+    Lọc lịch sử hội thoại, chỉ giữ lại các tin nhắn từ người dùng (HumanMessage)
+    và các tin nhắn trả lời có nội dung của AI (AIMessage).
+    
+    Loại bỏ:
+    - ToolMessage (kết quả từ tool)
+    - AIMessage không có nội dung (thường là các tin nhắn chứa tool_calls)
+    """
+    filtered_messages = []
+    for m in messages:
+        # Giữ lại tất cả HumanMessage
+        if isinstance(m, HumanMessage):
+            filtered_messages.append(m)
+        # Chỉ giữ lại AIMessage nếu nó có nội dung văn bản để trò chuyện
+        elif isinstance(m, AIMessage) and m.content:
+            filtered_messages.append(m)
+    return filtered_messages
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\config.py`:
+
+```````py
+# src/flight_booking_agent/config.py
+import os
+from dotenv import load_dotenv
+# Thay đổi import
+from langchain_google_vertexai import ChatVertexAI
+
+
+
+load_dotenv()
+llm = ChatVertexAI(
+    model_name="gemini-2.5-pro", 
+    temperature=0.7,
+    project="end-to-end-agentic-rag",  
+    location="us-central1",     
+)
+
+
+
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\graph\state.py`:
+
+```````py
+from typing import List, TypedDict, Annotated, Optional, Literal
+from langchain_core.messages import BaseMessage
+import operator
+
+class AgentState(TypedDict):
+    """
+    Trạng thái chung cho hệ thống Multi-Agent, được chia sẻ qua tất cả các node.
+
+    Attributes:
+        messages: Lịch sử hội thoại.
+        next_agent: Agent tiếp theo được gọi, do Manager quyết định.
+        ... các trường dữ liệu khác được thu thập trong quá trình ...
+    """
+    # Lịch sử hội thoại
+    messages: Annotated[List[BaseMessage], operator.add]
+
+    # Trường điều hướng luồng
+    next_agent: Optional[str]
+    # Lưu lại tên của agent vừa hoạt động ở lượt trước.
+    previous_agent: Optional[str]
+
+    # Các thông tin được thu thập (tương đương BookingDeps)
+    airline: Optional[str]
+    flight_number: Optional[str]
+    departure_from: Optional[str]
+    arrival_to: Optional[str]
+    departure_date: Optional[str]
+    departure_time: Optional[str]
+    travel_class: Optional[Literal["ECONOMY", "PREMIUM_ECONOMY", "BUSINESS", "FIRST"]]
+    passenger_count: Optional[List[dict]]
+    ancillary: Optional[List[dict]]
+    original_ticket_price: Optional[str]
+    
+    # Kết quả tìm kiếm và lựa chọn
+    search_results: Optional[List[dict]]
+    confirmed_flight: Optional[dict]
+
+    # THÊM TRƯỜNG MỚI ĐỂ LƯU DANH SÁCH HÀNH KHÁCH
+    passengers: Optional[List[dict]]
+    
+     # THÊM TRƯỜNG MỚI
+    final_confirmation_sent: Optional[bool] # Cờ để đánh dấu đã gửi xác nhận cuối cùng
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\graph\workflow.py`:
+
+```````py
+from langgraph.graph import StateGraph, END
+from langgraph.prebuilt import ToolNode
+#from langgraph.checkpoint.sqlite import SqliteSaver  # THÊM DÒNG NÀY
+from langgraph.checkpoint.memory import InMemorySaver
+from .state import AgentState
+from ..agents import manager, booking, cancel_booking, general, router
+from ..tools import booking_tools
+
+# 1. Tập hợp tất cả các tool
+all_tools = [
+    booking_tools.search_flights_tool,
+]
+tool_node = ToolNode(all_tools)
+
+# 2. Xây dựng đồ thị
+workflow = StateGraph(AgentState)
+
+# Thêm tất cả các node
+workflow.add_node("router", router.proxy_router_node)
+workflow.add_node("manager", manager.manager_node)
+workflow.add_node("booking_agent", booking.booking_node)
+workflow.add_node("cancel_booking_agent", cancel_booking.cancel_booking_node)
+workflow.add_node("general_agent", general.general_node)
+workflow.add_node("tools", tool_node)
+
+# 3. Định nghĩa các cạnh (giữ nguyên code cũ của bạn)
+workflow.set_entry_point("router")
+
+workflow.add_conditional_edges(
+    "router",
+    lambda state: state["next_agent"],
+    {
+        "manager": "manager",
+        "booking_agent": "booking_agent",
+        "cancel_booking_agent": "cancel_booking_agent",
+        "general_agent": "general_agent",
+    }
+)
+
+def route_from_manager(state: AgentState):
+    next_agent = state.get("next_agent")
+    return next_agent
+
+workflow.add_conditional_edges("manager", route_from_manager)
+
+def route_after_task(state: AgentState):
+    last_message = state['messages'][-1]
+    if hasattr(last_message, 'tool_calls') and last_message.tool_calls:
+        return "tools"
+    if state.get("next_agent") == "manager":
+        return "manager"
+    return END
+
+workflow.add_conditional_edges("booking_agent", route_after_task)
+workflow.add_conditional_edges("cancel_booking_agent", route_after_task)
+workflow.add_conditional_edges("general_agent", route_after_task)
+
+def route_after_tools(state: AgentState) -> str:
+    previous_agent = state.get("previous_agent")
+    if previous_agent:
+        print(f">>> Tool execution finished. Returning to: {previous_agent}")
+        return previous_agent
+    else:
+        return "manager"
+
+workflow.add_conditional_edges(
+    "tools",
+    route_after_tools,
+    {
+        "booking_agent": "booking_agent",
+        "cancel_booking_agent": "cancel_booking_agent",
+        "general_agent": "general_agent",
+    }
+)
+
+# 4. ✅ THÊM CHECKPOINT VÀO ĐÂY
+
+checkpointer = InMemorySaver()
+app = workflow.compile(checkpointer=checkpointer)
+
+
+
+try:
+    app.get_graph().draw_mermaid_png(output_file_path="D:\\Project\\-n-T-t-Nghi-p-\\img\\workflow_graph.png")
+    print("Đã vẽ sơ đồ workflow ra file: workflow_graph.png")
+except Exception as e:
+    print(f"Không thể vẽ đồ thị: {e}")
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\graph\__init__.py`:
+
+```````py
+from .state import AgentState
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\output.txt`:
+
+```````txt
 Project Path: \\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent
 
 Source Tree:
@@ -1604,4 +2687,122 @@ def search_flights_tool(origin: str, destination: str, departure_date: str, adul
         return json.dumps({"error": "Xin lỗi, tôi không tìm thấy chuyến bay nào phù hợp hoặc đã có lỗi xảy ra."})
         
     return json.dumps(search_results, ensure_ascii=False, indent=2)
+```````
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\services\amadeus_client.py`:
+
+```````py
+# src/flight_booking_agent/services/amadeus_client.py
+import os
+from amadeus import Client, ResponseError
+from dotenv import load_dotenv
+
+load_dotenv()
+
+class AmadeusClient:
+    def __init__(self):
+        try:
+            self.client = Client(
+                client_id=os.getenv("AMADEUS_CLIENT_ID"),
+                client_secret=os.getenv("AMADEUS_CLIENT_SECRET"),
+                hostname=os.getenv("AMADEUS_HOSTNAME", "test") # Mặc định là môi trường test
+            )
+        except Exception as e:
+            print(f"Lỗi: Không thể khởi tạo Amadeus Client. Vui lòng kiểm tra biến môi trường.")
+            print(f"Chi tiết lỗi: {e}")
+            self.client = None
+
+    def search_flights(self, origin, destination, departure_date, adults, non_stop=False, max_results=5):
+        if not self.client:
+            return {"error": "Amadeus Client chưa được khởi tạo."}
+
+        params = {
+            'originLocationCode': origin,
+            'destinationLocationCode': destination,
+            'departureDate': departure_date,
+            'adults': adults,
+            'nonStop': 'true' if non_stop else 'false',
+            'max': max_results,
+            'currencyCode': 'VND'
+        }
+        
+        print(f"--- Đang tìm kiếm chuyến bay với tham số: {params} ---")
+        try:
+            response = self.client.shopping.flight_offers_search.get(**params)
+            return self.format_flight_results(response.data)
+        except ResponseError as error:
+            print(f"Lỗi API Amadeus: {error.response.result}")
+            return {"error": "Không tìm thấy chuyến bay hoặc có lỗi xảy ra.", "details": error.response.result}
+
+    def format_flight_results(self, flight_data):
+        """Định dạng lại kết quả cho dễ đọc và xử lý."""
+        formatted = []
+        for offer in flight_data:
+            itinerary = offer['itineraries'][0]
+            segment = itinerary['segments'][0]
+            price = offer['price']['total']
+            
+            formatted.append({
+                "airline": segment['carrierCode'],
+                "flight_number": f"{segment['carrierCode']}{segment['number']}",
+                "departure_airport": segment['departure']['iataCode'],
+                "departure_time": segment['departure']['at'],
+                "arrival_airport": itinerary['segments'][-1]['arrival']['iataCode'],
+                "arrival_time": itinerary['segments'][-1]['arrival']['at'],
+                "duration": itinerary['duration'],
+                "stops": len(itinerary['segments']) - 1,
+                "price": float(price),
+                "currency": "VND"
+            })
+        return formatted
+
+# Tạo một instance duy nhất để toàn bộ ứng dụng sử dụng
+amadeus_client = AmadeusClient()
+```````
+
+`\\?\D:\Project\-n-T-t-Nghi-p-\src\flight_booking_agent\tools\booking_tools.py`:
+
+```````py
+# src/flight_booking_agent/tools/flight_tools.py
+import json
+from langchain_core.tools import tool
+from pydantic import BaseModel, Field
+from typing import Optional
+
+# Import a-ma-de-us client đã được khởi tạo sẵn
+from ..services.amadeus_client import amadeus_client
+
+class FlightSearchInput(BaseModel):
+    """Cấu trúc dữ liệu đầu vào cho công cụ tìm kiếm chuyến bay."""
+    origin: str = Field(description="Mã IATA của thành phố đi. Ví dụ: 'SGN'")
+    destination: str = Field(description="Mã IATA của thành phố đến. Ví dụ: 'HAN'")
+    departure_date: str = Field(description="Ngày đi theo định dạng YYYY-MM-DD.")
+    adults: Optional[int] = Field(description="Số lượng hành khách người lớn.")
+
+@tool("flight-search-tool", args_schema=FlightSearchInput)
+def search_flights_tool(origin: str, destination: str, departure_date: str, adults: int) -> str:
+    """
+    Sử dụng công cụ này để tìm kiếm các chuyến bay.
+    Công cụ sẽ gọi đến Amadeus API với các tham số được cung cấp.
+    """
+    print(f"--- TOOL: Bắt đầu tìm kiếm chuyến bay từ {origin} đến {destination} vào ngày {departure_date} cho {adults} người lớn ---")
+    
+    # Sử dụng amadeus_client đã import
+    search_results = amadeus_client.search_flights(
+        origin=origin,
+        destination=destination,
+        departure_date=departure_date,
+        adults=adults,
+        max_results=10 # Giới hạn 5 kết quả cho ngắn gọn
+    )
+    
+    # Tool của LangChain nên trả về một chuỗi (string), vì vậy ta chuyển kết quả thành chuỗi JSON
+    if not search_results or "error" in search_results:
+        return json.dumps({"error": "Xin lỗi, tôi không tìm thấy chuyến bay nào phù hợp hoặc đã có lỗi xảy ra."})
+        
+    return json.dumps(search_results, ensure_ascii=False, indent=2)
+
+
+
 ```````
